@@ -21,7 +21,13 @@ from .presets import (
     triage_questions,
 )
 from .router import DEFAULT_MODELS, RouteDecision, Router
-from .shortlist import embed_fn_from_agent, predict_shortlist, shortlist_choice
+from .integrations import (
+    LayaEvaluator,
+    LayaGuardrail,
+    LayaGuardrailError,
+    LayaRouter,
+    LayaTriage,
+)
 
 __version__ = "0.3.7"
 __all__ = [
@@ -51,5 +57,10 @@ __all__ = [
     "render_options",
     "QTYPES",
     "QTYPE_NAMES",
+    "LayaRouter",
+    "LayaGuardrail",
+    "LayaGuardrailError",
+    "LayaTriage",
+    "LayaEvaluator",
     "__version__",
 ]

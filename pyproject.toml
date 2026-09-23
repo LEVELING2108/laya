@@ -34,13 +34,16 @@ dependencies = [
 
 [tool.setuptools]
 # assets/, research/ and notebooks/ sit in the root, so auto-discovery bails out.
-packages = ["laya"]
+packages = ["laya", "laya.integrations"]
 
 [project.optional-dependencies]
 # `pip install laya[serve]` adds the HTTP server (laya.serve / the laya-serve CLI).
 serve = [
     "fastapi>=0.110.0",
     "uvicorn>=0.27.0",
+]
+langchain = [
+    "langchain-core>=0.2.0",
 ]
 
 [project.scripts]
