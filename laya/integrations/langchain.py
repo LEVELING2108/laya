@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 # Optional LangChain base class integration
 try:
