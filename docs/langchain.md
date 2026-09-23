@@ -14,7 +14,9 @@ Supports both **local in-process inference** (`Agent` or `Router`) and **remote 
 ## Installation
 
 ```bash
-pip install "laya[langchain]"
+pip install "laya[langchain]"   # Installs both langchain-core and langgraph
+# or
+pip install "laya[langgraph]"
 ```
 
 ---
