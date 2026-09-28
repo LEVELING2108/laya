@@ -31,6 +31,7 @@ env var                    meaning                                        defaul
 ``LAYA_MAX_CONCURRENT``    cap on requests past auth at once; excess      16
                            gets 503 (see below)
 ``LAYA_MAX_TOKEN_BUDGET``  cap on per-request max_len / head_max_len       8192
+``LAYA_ROOT_PATH``          ASGI root_path for reverse proxy subpaths      (empty)
 =========================  ============================================  =========
 
 ``LAYA_DEVICE`` is a preference, not a guarantee: an ``Agent`` that asks for a
@@ -199,6 +200,21 @@ def _resolve_port() -> int:
     return port
 
 
+def _resolve_root_path(explicit: Optional[str] = None) -> str:
+    """ASGI root_path for reverse proxy subpaths (e.g. /laya).
+
+    Normalized to have a leading slash and no trailing slash. An empty or
+    slash-only value returns an empty string.
+    """
+    raw = explicit if explicit is not None else os.environ.get("LAYA_ROOT_PATH", "")
+    val = (raw or "").strip()
+    if not val or val == "/":
+        return ""
+    if not val.startswith("/"):
+        val = "/" + val
+    return val.rstrip("/")
+
+
 def _check_request_limits(state: Any, questions: Any) -> None:
     """Reject absent or oversized inference requests before tokenization (400/413)."""
     from fastapi import HTTPException
@@ -321,7 +337,7 @@ def build_router():
     return router
 
 
-def create_app(router: Optional[Any] = None):
+def create_app(router: Optional[Any] = None, root_path: Optional[str] = None):
     """Build the FastAPI app. Pass a Router to inject one (tests); otherwise one
     is built from the environment (and preloaded) at app-creation time."""
     import asyncio
@@ -368,6 +384,7 @@ def create_app(router: Optional[Any] = None):
         title="laya-serve",
         summary="Laya System-1 decisions over the TypeSafe Jev /v1/systemone protocol",
         lifespan=lifespan,
+        root_path=_resolve_root_path(root_path),
     )
 
     # Compared as bytes, not str. `hmac.compare_digest` raises TypeError when a str
@@ -536,12 +553,14 @@ def main() -> None:
                     pass  # a latency hint, never a reason to drop the connection
             super().connection_made(transport)
 
+    root_path = _resolve_root_path()
     uvicorn.run(
-        create_app(),
+        create_app(root_path=root_path),
         host=os.environ.get("LAYA_HOST", "0.0.0.0"),
         port=_resolve_port(),
         log_level=os.environ.get("LAYA_LOG_LEVEL", "info"),
         http=NoDelayHTTPProtocol,
+        root_path=root_path,
     )
 
 

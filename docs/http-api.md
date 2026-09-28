@@ -30,6 +30,8 @@ Everything is environment variables, so one image serves a laptop dev run and a 
 | `LAYA_API_KEY` | if set, require `Authorization: Bearer <key>` | none |
 | `LAYA_LOG_LEVEL` | uvicorn log level | `info` |
 | `LAYA_MAX_CONCURRENT` | requests admitted past auth at once; excess gets `503` | `16` |
+| `LAYA_MAX_TOKEN_BUDGET` | cap on per-request `max_len` / `head_max_len` overrides | `8192` |
+| `LAYA_ROOT_PATH` | ASGI root path for reverse proxy subpaths (e.g. `/laya`) | (empty) |
 
 For containers, including CUDA and ARM64 images, see [Docker quickstart](docker.md).
 

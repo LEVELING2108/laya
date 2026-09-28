@@ -244,6 +244,16 @@ in
       '';
     };
 
+    rootPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/laya";
+      description = ''
+        ASGI root path when reverse-proxied behind a subpath prefix (sets
+        `LAYA_ROOT_PATH`).
+      '';
+    };
+
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
@@ -290,6 +300,8 @@ in
         LAYA_MAX_TOKEN_BUDGET = toString cfg.maxTokenBudget;
       } // lib.optionalAttrs (cfg.revision != null) {
         LAYA_REVISION = cfg.revision;
+      } // lib.optionalAttrs (cfg.rootPath != null) {
+        LAYA_ROOT_PATH = cfg.rootPath;
       } // {
         HF_HOME = "/var/lib/${cfg.stateDirectory}/huggingface";
         # torch-bin bundles its own CUDA runtime but still needs the host

@@ -25,6 +25,7 @@ from laya.serve import (  # noqa: E402
     _resolve_max_token_budget,
     _resolve_max_loaded,
     _resolve_model,
+    _resolve_root_path,
     create_app,
 )
 
@@ -940,4 +941,41 @@ def test_resolve_max_token_budget_fallback(monkeypatch, caplog):
         assert _resolve_max_token_budget() == DEFAULT_MAX_TOKEN_BUDGET
     assert "invalid LAYA_MAX_TOKEN_BUDGET" in caplog.text
     assert "LAYA_MAX_TOKEN_BUDGET must be positive" in caplog.text
+
+
+def test_resolve_root_path(monkeypatch):
+    monkeypatch.delenv("LAYA_ROOT_PATH", raising=False)
+    assert _resolve_root_path() == ""
+    assert _resolve_root_path("") == ""
+    assert _resolve_root_path("/") == ""
+    assert _resolve_root_path("/laya") == "/laya"
+    assert _resolve_root_path("laya") == "/laya"
+    assert _resolve_root_path("/laya/") == "/laya"
+    assert _resolve_root_path("laya/api/") == "/laya/api"
+
+    monkeypatch.setenv("LAYA_ROOT_PATH", "/proxy")
+    assert _resolve_root_path() == "/proxy"
+    # explicit argument overrides environment variable
+    assert _resolve_root_path("/custom") == "/custom"
+    assert _resolve_root_path("") == ""
+
+
+def test_root_path_configuration(monkeypatch):
+    monkeypatch.setenv("LAYA_ROOT_PATH", "/laya")
+    app = create_app(FakeRouter())
+    assert app.root_path == "/laya"
+
+    # Explicit argument overrides environment variable
+    app_custom = create_app(FakeRouter(), root_path="/v1/subpath")
+    assert app_custom.root_path == "/v1/subpath"
+
+    # Default without env var is empty string
+    monkeypatch.delenv("LAYA_ROOT_PATH", raising=False)
+    app_default = create_app(FakeRouter())
+    assert app_default.root_path == ""
+
+    client = TestClient(app)
+    resp = client.get("/health")
+    assert resp.status_code == 200
+
 

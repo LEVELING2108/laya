@@ -242,6 +242,7 @@ These apply to the `laya-serve` service only.
 | `LAYA_LOG_LEVEL` | `info` | uvicorn log level |
 | `LAYA_API_KEY` | (none) | when set, requires `Authorization: Bearer <key>` |
 | `LAYA_MAX_TOKEN_BUDGET` | `8192` | cap on per-request `max_len` and `head_max_len` overrides |
+| `LAYA_ROOT_PATH` | (empty) | ASGI root_path when served behind a reverse proxy subpath (e.g. `/laya`) |
 
 `LAYA_PRELOAD` defaults to `0` here rather than the package default of `1`, because
 preloading makes the first boot download all three checkpoints. Set it to `1` for a
