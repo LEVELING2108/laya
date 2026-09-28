@@ -555,7 +555,7 @@ def main() -> None:
 
     root_path = _resolve_root_path()
     uvicorn.run(
-        create_app(root_path=root_path),
+        create_app(),
         host=os.environ.get("LAYA_HOST", "0.0.0.0"),
         port=_resolve_port(),
         log_level=os.environ.get("LAYA_LOG_LEVEL", "info"),
