@@ -189,6 +189,86 @@ check("threshold/fallback_tool_obj", decision_fb.tool, fallback_tool)
 check("threshold/fallback_index", decision_fb.tool_index, -1)
 
 
+# --------------------------------------------------------------- 4b. Threshold Validation & Fail-Closed Behavior
+# Validation of confidence_threshold to [0.0, 1.0]
+for bad_thresh in (-0.1, 1.05, 2.0, True, False, float("nan"), "0.5"):
+    try:
+        LayaToolSelector(tools=tools_list, confidence_threshold=bad_thresh)
+        FAIL.append(f"threshold_val/bad_{bad_thresh!r}: expected ValueError")
+    except ValueError:
+        PASS.append(f"threshold_val/rejects_{bad_thresh!r}")
+
+check("threshold_val/accepts_zero", LayaToolSelector(tools=tools_list, confidence_threshold=0.0).confidence_threshold, 0.0)
+check("threshold_val/accepts_one", LayaToolSelector(tools=tools_list, confidence_threshold=1.0).confidence_threshold, 1.0)
+check("threshold_val/accepts_float", LayaToolSelector(tools=tools_list, confidence_threshold=0.75).confidence_threshold, 0.75)
+
+# Fail-closed: empty answers object must raise rather than selecting tool_0
+empty_agent = MockLayaAgent(lambda s, q: {"model": "laya-multilingual", "answers": {}})
+selector_empty = LayaToolSelector(tools=tools_list, agent=empty_agent)
+try:
+    selector_empty.select("Query")
+    FAIL.append("fail_closed/empty_answers: expected RuntimeError")
+except RuntimeError as e:
+    PASS.append("fail_closed/empty_answers_raises")
+    check_true("fail_closed/empty_answers_msg", "Malformed or missing decision response" in str(e))
+
+# Fail-closed with fallback: empty answers routes to fallback tool
+selector_empty_fb = LayaToolSelector(tools=tools_list, fallback_tool=fallback_tool, agent=empty_agent)
+dec_empty_fb = selector_empty_fb.select("Query")
+check("fail_closed/empty_fallback_used", dec_empty_fb.is_fallback, True)
+check("fail_closed/empty_fallback_name", dec_empty_fb.tool_name, "general_llm_fallback")
+
+# Fail-closed: missing / unknown choice key
+unknown_choice_agent = MockLayaAgent(lambda s, q: {"model": "laya-multilingual", "answers": {"tool_select": {"choice": "unknown_tool", "confidence": 0.99}}})
+selector_unknown = LayaToolSelector(tools=tools_list, agent=unknown_choice_agent)
+try:
+    selector_unknown.select("Query")
+    FAIL.append("fail_closed/unknown_choice: expected RuntimeError")
+except RuntimeError as e:
+    PASS.append("fail_closed/unknown_choice_raises")
+    check_true("fail_closed/unknown_choice_msg", "choice 'unknown_tool' not in candidate tools" in str(e))
+
+selector_unknown_fb = LayaToolSelector(tools=tools_list, fallback_tool=fallback_tool, agent=unknown_choice_agent)
+dec_unknown_fb = selector_unknown_fb.select("Query")
+check("fail_closed/unknown_choice_fallback_used", dec_unknown_fb.is_fallback, True)
+
+# Fail-closed: unusable / None / NaN confidence must fail closed
+nan_conf_agent = MockLayaAgent(lambda s, q: {
+    "model": "laya-multilingual",
+    "answers": {
+        "tool_select": {
+            "choice": "tool_0",
+            "confidence": float("nan"),
+            "answer_confidence": None,
+        }
+    }
+})
+selector_nan = LayaToolSelector(tools=tools_list, agent=nan_conf_agent)
+try:
+    selector_nan.select("Query")
+    FAIL.append("fail_closed/nan_confidence: expected LayaLowConfidenceError")
+except LayaLowConfidenceError:
+    PASS.append("fail_closed/nan_confidence_raises")
+
+selector_nan_fb = LayaToolSelector(tools=tools_list, fallback_tool=fallback_tool, agent=nan_conf_agent)
+dec_nan_fb = selector_nan_fb.select("Query")
+check("fail_closed/nan_confidence_fallback_used", dec_nan_fb.is_fallback, True)
+
+# Fail-closed protects executable call(): never runs tool_0 on missing/malformed/unknown decisions
+tool_exec_counter = {"calls": 0}
+def dangerous_tool():
+    tool_exec_counter["calls"] += 1
+    return "executed"
+
+selector_safe_call = LayaToolSelector(tools=[dangerous_tool], agent=empty_agent)
+try:
+    selector_safe_call.call("Query")
+    FAIL.append("fail_closed/call_should_not_execute: expected RuntimeError")
+except RuntimeError:
+    PASS.append("fail_closed/call_prevented_execution")
+check("fail_closed/tool_not_called", tool_exec_counter["calls"], 0)
+
+
 # --------------------------------------------------------------- 5. Direct Execution (call)
 def add_numbers(a: int, b: int) -> int:
     """Add two numbers together."""

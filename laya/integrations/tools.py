@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import threading
 import urllib.error
 import urllib.parse
@@ -28,13 +29,12 @@ from ._controls import hook_kwargs as _hook_kwargs
 from ._controls import predict_kwargs as _predict_kwargs
 from ._controls import reject_remote_hooks as _reject_remote_hooks
 from ._errors import LayaLowConfidenceError
-from ..confidence import _gate_confidence
+from ..confidence import _gate_confidence, check_min_confidence
 
 
-def _gated_confidence(answer: Dict[str, Any]) -> float:
-    """Extract calibrated confidence score from a Laya decision answer."""
-    conf = _gate_confidence(answer or {})
-    return conf if conf is not None else 1.0
+def _gated_confidence(answer: Dict[str, Any]) -> Optional[float]:
+    """Extract calibrated confidence score from a Laya decision answer, or None if unusable."""
+    return _gate_confidence(answer or {})
 
 
 @dataclass
@@ -262,7 +262,20 @@ class LayaToolSelector:
         self.instructions = instructions
         self.allow_direct_answer = bool(allow_direct_answer)
         self.direct_answer_description = direct_answer_description
-        self.confidence_threshold = confidence_threshold
+        if confidence_threshold is not None:
+            if (
+                isinstance(confidence_threshold, bool)
+                or not isinstance(confidence_threshold, (int, float))
+                or not math.isfinite(confidence_threshold)
+                or confidence_threshold < 0.0
+                or confidence_threshold > 1.0
+            ):
+                raise ValueError(
+                    f"confidence_threshold must be a float in [0.0, 1.0], got {confidence_threshold!r}"
+                )
+            self.confidence_threshold = float(confidence_threshold)
+        else:
+            self.confidence_threshold = None
         self.fallback_tool = fallback_tool
         self.agent = agent
         self.base_url = base_url
@@ -271,6 +284,8 @@ class LayaToolSelector:
         self.max_len = max_len
         self.head_max_len = head_max_len
         self.lang = lang
+        if min_confidence is not None:
+            check_min_confidence(min_confidence)
         self.min_confidence = min_confidence
         self.hooks = hooks
         self.on_predict_start = on_predict_start
@@ -324,52 +339,111 @@ class LayaToolSelector:
             hooks_timeout=self.hooks_timeout,
         )
 
-        answer = result.get("answers", {}).get("tool_select", {})
-        chosen_key = answer.get("choice")
-        conf = _gated_confidence(answer)
-        raw_probs = answer.get("probabilities", {})
-
-        # Map internal keys back to tool names in probabilities
-        probabilities: Dict[str, float] = {}
-        for k, prob in raw_probs.items():
-            if k in lookup:
-                tool_info = lookup[k]
-                probabilities[tool_info[2]] = float(prob)
-            else:
-                probabilities[k] = float(prob)
-
-        # Check confidence gating
-        threshold = self.confidence_threshold if self.confidence_threshold is not None else self.min_confidence
-        is_low_confidence = bool(answer.get("low_confidence")) or (threshold is not None and conf < threshold)
-
-        if is_low_confidence:
+        answers_dict = result.get("answers")
+        if not isinstance(answers_dict, dict) or "tool_select" not in answers_dict:
             if self.fallback_tool is not None:
                 fb_name, _ = _extract_tool_metadata(self.fallback_tool, -1)
                 return ToolRouteDecision(
                     tool=self.fallback_tool,
                     tool_name=fb_name,
                     tool_index=-1,
-                    confidence=conf,
+                    confidence=0.0,
+                    probabilities={},
+                    reason="Missing or malformed decision response; routed to fallback tool",
+                    is_direct_answer=False,
+                    is_fallback=True,
+                    raw_decision=result,
+                )
+            raise RuntimeError(f"Malformed or missing decision response from Laya: {result!r}")
+
+        answer = answers_dict["tool_select"]
+        if not isinstance(answer, dict):
+            if self.fallback_tool is not None:
+                fb_name, _ = _extract_tool_metadata(self.fallback_tool, -1)
+                return ToolRouteDecision(
+                    tool=self.fallback_tool,
+                    tool_name=fb_name,
+                    tool_index=-1,
+                    confidence=0.0,
+                    probabilities={},
+                    reason="Malformed decision answer; routed to fallback tool",
+                    is_direct_answer=False,
+                    is_fallback=True,
+                    raw_decision=result,
+                )
+            raise RuntimeError(f"Malformed decision answer from Laya: {answer!r}")
+
+        chosen_key = answer.get("choice")
+        conf = _gated_confidence(answer)
+        raw_probs = answer.get("probabilities", {})
+
+        # Map internal keys back to tool names in probabilities
+        probabilities: Dict[str, float] = {}
+        if isinstance(raw_probs, dict):
+            for k, prob in raw_probs.items():
+                if k in lookup:
+                    tool_info = lookup[k]
+                    probabilities[tool_info[2]] = float(prob)
+                else:
+                    probabilities[k] = float(prob)
+
+        # Check confidence gating: unusable, missing, or NaN confidence fails closed
+        threshold = self.confidence_threshold if self.confidence_threshold is not None else self.min_confidence
+        is_low_confidence = (
+            bool(answer.get("low_confidence"))
+            or conf is None
+            or (threshold is not None and conf < threshold)
+        )
+
+        if is_low_confidence:
+            effective_conf = conf if conf is not None else 0.0
+            if self.fallback_tool is not None:
+                fb_name, _ = _extract_tool_metadata(self.fallback_tool, -1)
+                return ToolRouteDecision(
+                    tool=self.fallback_tool,
+                    tool_name=fb_name,
+                    tool_index=-1,
+                    confidence=effective_conf,
                     probabilities=probabilities,
-                    reason=f"Confidence {conf:.3f} below threshold {threshold}; routed to fallback tool",
+                    reason=(
+                        f"Confidence {effective_conf:.3f} below threshold {threshold}; routed to fallback tool"
+                        if threshold is not None
+                        else "Unusable or low confidence decision; routed to fallback tool"
+                    ),
                     is_direct_answer=False,
                     is_fallback=True,
                     raw_decision=result,
                 )
             raise LayaLowConfidenceError(
-                f"Laya tool selection confidence {conf:.3f} is below threshold {threshold}",
-                confidence=conf,
+                (
+                    f"Laya tool selection confidence {effective_conf:.3f} is below threshold {threshold}"
+                    if threshold is not None
+                    else "Laya tool selection returned unusable or low confidence."
+                ),
+                confidence=effective_conf,
                 threshold=float(threshold) if threshold is not None else 0.0,
                 raw_decision=result,
             )
 
-        if chosen_key not in lookup:
-            # Fallback to first available tool if unmapped key returned
-            first_key = next(iter(lookup))
-            idx, tool_obj, name = lookup[first_key]
-        else:
-            idx, tool_obj, name = lookup[chosen_key]
+        if chosen_key is None or chosen_key not in lookup:
+            if self.fallback_tool is not None:
+                fb_name, _ = _extract_tool_metadata(self.fallback_tool, -1)
+                return ToolRouteDecision(
+                    tool=self.fallback_tool,
+                    tool_name=fb_name,
+                    tool_index=-1,
+                    confidence=conf if conf is not None else 0.0,
+                    probabilities=probabilities,
+                    reason=f"Unknown or missing tool decision {chosen_key!r}; routed to fallback tool",
+                    is_direct_answer=False,
+                    is_fallback=True,
+                    raw_decision=result,
+                )
+            raise RuntimeError(
+                f"Unknown or missing tool decision from Laya: choice {chosen_key!r} not in candidate tools."
+            )
 
+        idx, tool_obj, name = lookup[chosen_key]
         is_direct = (idx == -1)
         reason = (
             "Direct answer requested; no tool required"
