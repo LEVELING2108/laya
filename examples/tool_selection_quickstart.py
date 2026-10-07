@@ -1,7 +1,7 @@
 """Laya System 1 decision engine: Tool and Function Selection Quickstart.
 
 Demonstrates:
-1. Sub-35ms tool selection for AI agent workflows (replaces 1-2s LLM tool calling).
+1. Non-autoregressive tool selection for AI agent workflows (replaces 1-2s LLM tool calling).
 2. Direct execution via .call() with function arguments.
 3. Direct answer detection when no tool is needed (allow_direct_answer=True).
 4. Calibrated confidence threshold fallback gating for ambiguous requests.
@@ -78,14 +78,14 @@ def general_reasoning_fallback(prompt: str) -> str:
 
 def main():
     print("=" * 70)
-    print(" Laya System 1: Sub-35ms Tool and Function Selection")
+    print(" Laya System 1: Tool and Function Selection")
     print("=" * 70)
 
     tools = [search_web, calculate_tax, query_database]
     agent = _DemoAgent()
 
     # 1. Standard Tool Selection
-    print("\n[1] Sub-35ms Tool Selection:")
+    print("\n[1] Single-Pass Tool Selection:")
     selector = LayaToolSelector(tools=tools, agent=agent)
 
     queries = [

@@ -77,8 +77,6 @@ _LAZY_ATTRS = {
     "LayaTriage": (".integrations", "LayaTriage"),
     "LayaEvaluator": (".integrations", "LayaEvaluator"),
     "LayaDecision": (".integrations", "LayaDecision"),
-    "LayaToolSelector": (".integrations", "LayaToolSelector"),
-    "ToolRouteDecision": (".integrations", "ToolRouteDecision"),
 }
 
 
@@ -146,8 +144,6 @@ __all__ = [
     "LayaTriage",
     "LayaEvaluator",
     "LayaDecision",
-    "LayaToolSelector",
-    "ToolRouteDecision",
     "PredictContext",
     "PredictHook",
     "Hook",

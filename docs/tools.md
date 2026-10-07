@@ -1,11 +1,11 @@
 # Tool & Function Selection
 
-Laya provides sub-35ms, non-autoregressive tool routing and function selection for AI agent workflows across **LangChain**, **CrewAI**, **LlamaIndex**, and vanilla agent architectures (single-question latency measured at **32.8 ms** with `laya-multilingual` and **39.5 ms** with `laya` on a Tesla T4 GPU; 193–464 ms on CPU):
+Laya provides non-autoregressive tool routing and function selection for AI agent workflows across **LangChain**, **CrewAI**, **LlamaIndex**, and vanilla agent architectures (single-question latency measured at **32.8 ms** with `laya-multilingual` and **39.5 ms** with `laya` on a Tesla T4 GPU; **p50 125.6 ms** on Apple Silicon; **193–464 ms** on CPU):
 
-* **`LayaToolSelector`**: Sub-35ms tool router evaluating user queries and agent states against candidate tools in a single forward pass.
+* **`LayaToolSelector`**: Tool routing component evaluating user queries and agent states against candidate tools in a single forward pass (~33–40 ms on Tesla T4 GPU, ~88–464 ms on CPU/Apple Silicon).
 * **`ToolRouteDecision`**: Structured routing result carrying the selected tool, tool index, calibrated confidence, probability distribution across tools, and fallback status.
 
-Replaces slow, token-generating LLM tool-calling (1,000–2,500 ms) with deterministic, typed decisions executed in <35 ms with **zero token generation cost**.
+Replaces slow, token-generating LLM tool-calling (1,000–2,500 ms) with deterministic, typed decisions executed in a single forward pass with **zero token generation cost**.
 
 Supports both **local in-process inference** (`Agent` or `Router`) and **remote HTTP inference** against your own `laya-serve` instance without requiring PyTorch on edge clients.
 
@@ -19,9 +19,9 @@ pip install laya
 
 ---
 
-## 1. Sub-35ms Tool Selection
+## 1. Single-Pass Tool Selection
 
-Autoregressive LLMs (such as GPT-4o or Claude 3.5 Sonnet) take 1–2 seconds generating reasoning tokens just to choose which tool to call. `LayaToolSelector` evaluates candidate tools against the query in **~33 ms**:
+Autoregressive LLMs (such as GPT-4o or Claude 3.5 Sonnet) take 1–2 seconds generating reasoning tokens just to choose which tool to call. `LayaToolSelector` evaluates candidate tools against the query in a single forward pass (~33–40 ms on Tesla T4 GPU, ~88–126 ms on Apple Silicon, and 193–464 ms on CPU):
 
 ```python
 from laya.integrations.tools import LayaToolSelector
@@ -40,10 +40,10 @@ def query_database(sql: str):
 
 tools = [search_web, calculate_mortgage, query_database]
 
-# Initialize sub-35ms tool selector
+# Initialize tool selector
 selector = LayaToolSelector(tools=tools)
 
-# Select the matching tool in <35ms:
+# Select the matching tool:
 decision = selector.select("What is the current mortgage rate on a 30-year fixed loan?")
 print(f"Selected Tool: {decision.tool_name}")
 print(f"Confidence:    {decision.confidence:.3f}")

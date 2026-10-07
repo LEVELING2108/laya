@@ -1,6 +1,6 @@
 """Tool and function selection for agent frameworks using Laya System 1 decision engine.
 
-Provides sub-35ms, non-autoregressive tool routing and function selection for AI agent
+Provides non-autoregressive tool routing and function selection for AI agent
 workflows (LangChain, CrewAI, LlamaIndex, AutoGen, and custom agent loops).
 
 Replaces slow, token-generating LLM tool calling (1,000-2,500ms) with calibrated, typed
@@ -39,7 +39,7 @@ def _gated_confidence(answer: Dict[str, Any]) -> Optional[float]:
 
 @dataclass
 class ToolRouteDecision:
-    """Result of a Laya sub-35ms tool routing decision."""
+    """Result of a Laya tool routing decision."""
 
     tool: Any
     tool_name: str
@@ -50,6 +50,13 @@ class ToolRouteDecision:
     is_direct_answer: bool
     is_fallback: bool
     raw_decision: Dict[str, Any]
+
+
+__all__ = [
+    "LayaToolSelector",
+    "ToolRouteDecision",
+    "LayaLowConfidenceError",
+]
 
 
 def _extract_tool_metadata(tool: Any, default_index: int) -> Tuple[str, str]:
@@ -226,10 +233,11 @@ def _execute_decision(
 
 
 class LayaToolSelector:
-    """Sub-35ms tool and function router for AI agent workflows.
+    """Non-autoregressive tool and function router for AI agent workflows.
 
-    Evaluates user queries and agent states against candidate tools in a single
-    non-autoregressive forward pass, eliminating 1-2 second LLM tool-calling latency.
+    Evaluates candidate tools against a user prompt or agent state in a single
+    forward pass (measured at 32.8 ms with `laya-multilingual` and 39.5 ms with
+    `laya` on a Tesla T4 GPU; ~88–126 ms on Apple Silicon; 193–464 ms on CPU).
 
     Supports Python functions, LangChain/CrewAI/LlamaIndex tools, and JSON Schema specs.
     Works seamlessly with local in-process models (`Agent` / `Router`) and remote
@@ -299,7 +307,7 @@ class LayaToolSelector:
         tools: Optional[Sequence[Any]] = None,
         instructions: Optional[str] = None,
     ) -> ToolRouteDecision:
-        """Select the best candidate tool for the given query/state in sub-35ms."""
+        """Select the best candidate tool for the given query/state in a single forward pass."""
         candidate_tools = tools if tools is not None else self.tools
         if not candidate_tools and not self.allow_direct_answer:
             raise ValueError("No tools provided to LayaToolSelector.")

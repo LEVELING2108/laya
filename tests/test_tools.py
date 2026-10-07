@@ -367,8 +367,10 @@ for ctrl in HOOK_CONTROLS:
 integrations_mod = __import__("laya.integrations", fromlist=["__all__"])
 check_true("export/integrations_selector", "LayaToolSelector" in integrations_mod.__all__)
 check_true("export/integrations_decision", "ToolRouteDecision" in integrations_mod.__all__)
-check_true("export/laya_selector", "LayaToolSelector" in laya.__all__)
-check_true("export/laya_decision", "ToolRouteDecision" in laya.__all__)
+tools_mod = __import__("laya.integrations.tools", fromlist=["__all__"])
+check_true("export/tools_selector", "LayaToolSelector" in tools_mod.__all__)
+check_true("export/tools_decision", "ToolRouteDecision" in tools_mod.__all__)
+check_true("export/top_level_clean", "LayaToolSelector" not in laya.__all__ and "ToolRouteDecision" not in laya.__all__)
 
 
 # --------------------------------------------------------------- Report
